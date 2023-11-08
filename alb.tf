@@ -1,7 +1,34 @@
+# Create an Elastic IP
+resource "aws_eip" "ei" {}
+
+# Create a NAT Gateway
+resource "aws_nat_gateway" "nat1" {
+  allocation_id = aws_eip.ei.id
+  subnet_id     = aws_subnet.public_subnet1.id
+  tags = {
+    Name = "gw NAT"
+  }
+}
+
+# Create an Application Load Balancer
+resource "aws_lb" "application-lb" {
+  name                       = "application-lb"
+  internal                   = false
+  load_balancer_type         = "application"
+  security_groups            = [aws_security_group.lb.id]
+  subnets                    = [aws_subnet.public_subnet1.id, aws_subnet.public_subnet2.id]
+  enable_deletion_protection = false
+
+  tags = {
+    Environment = "application-lb"
+    Name        = "Application-lb"
+  }
+}
+
 # Create a target group
 resource "aws_lb_target_group" "alb-target-group" {
   name     = "application-lb-tg"
-  port     = 80
+  port     = var.http_port
   protocol = "HTTP"
   vpc_id   = aws_vpc.vpc1.id
 
@@ -9,9 +36,9 @@ resource "aws_lb_target_group" "alb-target-group" {
     enabled             = true
     healthy_threshold   = 3
     interval            = 10
-    matcher             = 200
+    matcher             = "200"
     path                = "/"
-    port                = "traffic-port"
+    port                = 80
     protocol            = "HTTP"
     timeout             = 6
     unhealthy_threshold = 3
@@ -31,31 +58,14 @@ resource "aws_lb_target_group_attachment" "attach-app1" {
   port             = 80
 }
 
-# Create a listener for load balancer
+# Create a listener for the load balancer
 resource "aws_lb_listener" "alb-http-listener" {
-    load_balancer_arn = aws_lb.application-lb.arn
-    port              = "80"
-    protocol          = "HTTP"
-  
-    default_action {
-      type             = "forward"
-      target_group_arn = aws_lb_target_group.alb-target-group.arn
-    }
-  }
+  load_balancer_arn = aws_lb.application-lb.arn
+  port              = 80
+  protocol          = "HTTP"
 
-# Create the load balancer
-resource "aws_lb" "application-lb" {
-  name               = "application-lb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.lb.id]
-  subnets            = ["${aws_subnet.public_subnet1.id}", "${aws_subnet.public_subnet2.id}"]
-
-  enable_deletion_protection = false
-
-  tags = {
-    Environment = "application-lb"
-    Name        = "Application-lb"
-    
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.alb-target-group.arn
   }
 }
